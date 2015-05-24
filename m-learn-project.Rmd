@@ -1,0 +1,91 @@
+---
+title: "Practical Machine Learning Course Project"
+subtitle: "Data Science by Johns Hopkins University on Coursera"
+date: "24-05-2015"
+output: html_document
+---
+
+
+#### **Summary:** 
+The goal of the project is to build a machine learning algorithm to predict the manner of execution of the Weight Lifting Exercises.  
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions:  
+* exactly according to the specification (Class A);  
+* throwing the elbows to the front (Class B);  
+* lifting the dumbbell only halfway (Class C);   
+* lowering the dumbbell only halfway (Class D);   
+* throwing the hips to the front (Class E).  
+For data recording were used the  sensors  in  the  users'  glove,  armband,  lumbar  belt  and dumbbell.  We designed the tracking system to be as unobtrusive as possible, as these are all equipmentm commonly used by weight lifters.  
+
+More information and original data set are available here:  
+[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har)  
+The training data for the project:  
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)  
+The test data:  
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)  
+
+#### **Data Processing:**  
+```{r requirement, echo=TRUE}
+require(randomForest)
+require(caret)
+```
+Load Train and Test Data Sets:  
+```{r loadData, echo=TRUE}
+trainData <- read.csv("data/pml-training.csv")
+testData <- read.csv("data/pml-testing.csv")
+```
+Test if the data sets are identical:
+```{r}
+dim(trainData); dim(testData)
+```
+The data sets have the identical number of columns. Well, test if there are any different columns:  
+```{r difTest, echo=TRUE}
+dif1 <- which(!(names(trainData) %in% names(testData)))
+dif2 <- which(!(names(testData) %in% names(trainData)))
+```
+There is a difference:  
+The ***trainData*** column #`r dif1`  contains ***`r names(trainData[dif1])`*** data,  
+The ***testData*** column #`r dif2`  contains ***`r names(testData[dif2])`*** data.
+Let's test if the data sets are complete:  
+```{r compRows,echo=TRUE}
+sum(complete.cases(trainData))
+sum(complete.cases(testData))
+```
+So we see there are too too few complete cases to make any real prediction. We need check the columns:  
+```{r compCols,echo=TRUE}
+sum(complete.cases(t(trainData)))
+sum(complete.cases(t(testData)))
+```
+Test Data Set has only 60 complete columns. So to build the real prediction we can delete all the columns with the NA's. From Test Data Set and from Train Data Set too.  
+```{r clearCol1, echo=TRUE}
+naTst <- apply(testData, MARGIN = 2, FUN = function(n){sum(is.na(n))})
+naTst <- which(naTst == 20)
+testData <- testData[,-naTst]
+trainData <- trainData[,-naTst]
+```
+Check the complete cases in the sets once more:  
+```{r checkNA, echo=TRUE}
+sum(is.na(trainData))
+sum(is.na(testData))
+```
+Good.
+Now we can delete some technical variables: 
+```{r techVarOff, echo=TRUE}
+trainData <- trainData[,8:60]
+testData <- testData[,8:60]
+```
+Well, we are ready to build predictive model.  
+
+#### **Prediction:**  
+To fit a model we can use the ***train()*** function of the ***caret*** library.  
+Set the method to "rf" (random forest), number of trees to 50 and train Control metod to "cv" with number parameter 10. So the function must execute 10-folds cross validation with random forest algorithm:  
+```{r fitting, echo=TRUE, cache=TRUE}
+fitModel <- train(classe ~ ., data = trainData, method = "rf", ntree=50, 
+                  trControl = trainControl(method = "cv", number = 10))
+fitModel$finalModel
+```
+The final model has out-of-bag (oob) error estimation.  
+I think the cross validation using allows us to consider the OOB error rate as ***out of sample error***. But we can calculate the out of sample error through the accuracy rate of each k-folds:  
+```{r outoOfSampleRate, echo=TRUE}
+ooEr <- 1 - mean(fitModel$resample$Accuracy)
+```
+So estimated out of sample error rate is ***`r round(ooEr * 100, 2)`%***.
